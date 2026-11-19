@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SustainDC Ops Console</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo"></div>
+    <div><h1>SUSTAINDC // OPS CONSOLE</h1><small>MULTI-AGENT CARBON-AWARE DATA CENTRE · 1 MW · CALIFORNIA · JULY</small></div>
+  </div>
+  <div class="clock" id="clock">D1 00:00<span>15-MIN CONTROL STEP</span></div>
+  <div class="transport">
+    <button class="btn on" id="btn-play" title="Play / pause (space)">❚❚ PAUSE</button>
+    <button class="btn" data-speed="1">1×</button>
+    <button class="btn on" data-speed="4">4×</button>
+    <button class="btn" data-speed="16">16×</button>
+    <button class="btn" id="btn-step" title="Advance one 15-minute step">STEP</button>
+    <button class="btn" id="btn-reset">RESET</button>
+  </div>
+  <nav class="tabs">
+    <button class="tab on" data-view="live">LIVE FACILITY</button>
+    <button class="tab" data-view="lab">MAPPO vs HAPPO LAB</button>
+    <button class="tab" data-view="results">MEASURED RESULTS</button>
+  </nav>
+  <div class="disclaimer">ILLUSTRATIVE SIMULATION — a calibrated stand-in, not the trained networks. Real experiment numbers are tagged MEASURED.</div>
+</header>
+
+<!-- ======================= LIVE FACILITY ======================= -->
+<main id="view-live" class="view on">
+  <section class="stack left">
+    <div class="panel">
+      <h2>Scenario presets</h2>
+      <div class="presets" id="presets">
+        <button class="btn preset" data-preset="baseline"><b>Baseline</b><i>18 °C, no shifting, battery idle</i></button>
+        <button class="btn preset" data-preset="happo"><b>HAPPO (ours)</b><i>all three agents active</i></button>
+        <button class="btn preset" data-preset="mappo"><b>MAPPO</b><i>simultaneous-update policy</i></button>
+        <button class="btn preset" data-preset="cooling"><b>Cooling only</b><i>manual: setpoint → 15 °C</i></button>
+        <button class="btn preset" data-preset="heatwave"><b>Heat wave</b><i>+6 °C outside, demand ×1.3</i></button>
+        <button class="btn preset" data-preset="evening"><b>Evening peak</b><i>jump to 17:00, dirty grid</i></button>
+        <button class="btn preset" data-preset="dirty"><b>Dirty grid</b><i>carbon intensity ×1.3</i></button>
+        <button class="btn preset" data-preset="compare"><b>Compare all</b><i>overlay every controller</i></button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Controller in charge</h2>
+      <div class="ctrl-group" id="ctrl-group">
+        <button class="btn" data-ctrl="baseline">BASELINE</button>
+        <button class="btn" data-ctrl="manual">MANUAL</button>
+        <button class="btn" data-ctrl="mappo">MAPPO</button>
+        <button class="btn on" data-ctrl="happo">HAPPO</button>
+      </div>
+      <label class="note" style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="chk-compare"> overlay all controllers on the charts</label>
+      <p class="note" id="ctrl-note"></p>
+    </div>
+
+    <div class="panel">
+      <h2>Environment</h2>
+      <div class="slider"><label>Workload demand <output id="o-demand">×1.00</output></label><input type="range" id="s-demand" min="0.6" max="1.5" step="0.05" value="1"></div>
+      <div class="slider"><label>Outdoor temperature offset <output id="o-tout">+0.0 °C</output></label><input type="range" id="s-tout" min="-6" max="10" step="0.5" value="0"></div>
+      <div class="slider"><label>Grid carbon intensity <output id="o-ci">×1.00</output></label><input type="range" id="s-ci" min="0.6" max="1.4" step="0.05" value="1"></div>
+      <h3>Jump to time of day</h3>
+      <div class="seg" id="jump">
+        <button class="btn" data-hour="0">00:00</button><button class="btn" data-hour="6">06:00</button>
+        <button class="btn" data-hour="12">12:00</button><button class="btn" data-hour="17">17:00</button>
+      </div>
+      <p class="note">Carbon, weather and workload traces are real SustainDC inputs (EIA July CI, San Jose weather, Alibaba CPU trace).</p>
+    </div>
+
+    <div class="panel">
+      <h2>Manual agent actions</h2>
+      <div class="manual-box disabled" id="manual-box">
+        <div class="agent-tag dc">COOLING AGENT · action ∈ {−1, 0, +1} °C per step</div>
+        <div class="slider"><label>Target setpoint <output id="o-sp">18.0 °C</output></label><input type="range" id="s-sp" min="15" max="21.6" step="0.1" value="18"></div>
+        <div class="agent-tag ls">LOAD SHIFTER</div>
+        <div class="seg" id="seg-ls">
+          <button class="btn" data-v="0">DEFER</button><button class="btn on" data-v="1">NORMAL</button><button class="btn" data-v="2">RUN QUEUE</button>
+        </div>
+        <div class="agent-tag bat">BATTERY</div>
+        <div class="seg" id="seg-bat">
+          <button class="btn" data-v="0">CHARGE</button><button class="btn" data-v="1">DISCHARGE</button><button class="btn on" data-v="2">IDLE</button>
+        </div>
+      </div>
+      <p class="note" id="manual-note">Select MANUAL to drive the three agents yourself.</p>
+    </div>
+  </section>
+
+  <section class="stack centre">
+    <div class="panel facility-wrap">
+      <h2 id="fac-title">Facility · live view</h2>
+      <svg id="facility" viewBox="0 0 1000 580" role="img" aria-label="Animated data centre facility"></svg>
+      <div class="legend-row">
+        <span style="--c:#ffd84d">power</span><span style="--c:#58e1ff">cold air</span><span style="--c:#ff6b6b">hot air</span>
+        <span style="--c:#4fd1c5">chilled water</span><span style="--c:#ff7eb6">load-shifter agent</span><span style="--c:#7ee787">cooling agent</span><span style="--c:#ffd84d">battery agent</span>
+      </div>
+    </div>
+    <div class="charts">
+      <div class="panel">
+        <h2>Grid power (kW) <span class="tag-ill">ILLUSTRATIVE</span></h2>
+        <canvas class="chart" id="ch-power"></canvas>
+        <div class="chart-legend" id="lg-power"></div>
+      </div>
+      <div class="panel">
+        <h2>Carbon intensity &amp; emissions <span class="tag-ill">ILLUSTRATIVE</span></h2>
+        <canvas class="chart" id="ch-carbon"></canvas>
+        <div class="chart-legend" id="lg-carbon"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Controllers side by side (same inputs, since reset) <span class="tag-ill">ILLUSTRATIVE</span></h2>
+      <table class="cmp" id="cmp-table">
+        <thead><tr><th>Controller</th><th>Avg grid kW</th><th>Energy MWh</th><th>CO₂ t</th><th>vs baseline energy</th><th>vs baseline CO₂</th><th>Avg PUE</th><th>Water m³</th><th>Unfinished jobs</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="note">Energy and CO₂ columns are metered totals. The "vs baseline" columns and the saved-vs-baseline counters are like-for-like: work still waiting in the deferred queue and energy drawn from the battery are charged back at the day's average carbon intensity, so postponing work does not count as a saving.</p>
+    </div>
+  </section>
+
+  <section class="stack right">
+    <div class="panel">
+      <h2>Live metrics <span id="who" class="tag-ill">HAPPO</span></h2>
+      <div class="kpis">
+        <div class="kpi big"><div class="lbl">Total grid power</div><div class="val" id="k-grid">0<small>kW</small></div><div class="sub" id="k-grid-sub"></div></div>
+        <div class="kpi"><div class="lbl">IT power</div><div class="val" id="k-it">0<small>kW</small></div></div>
+        <div class="kpi"><div class="lbl">Cooling power</div><div class="val" id="k-cool">0<small>kW</small></div></div>
+        <div class="kpi"><div class="lbl">Cold-aisle inlet</div><div class="val" id="k-inlet">0<small>°C</small></div></div>
+        <div class="kpi"><div class="lbl">Hot aisle</div><div class="val" id="k-hot">0<small>°C</small></div></div>
+        <div class="kpi"><div class="lbl">Workload</div><div class="val" id="k-util">0<small>%</small></div><div class="sub" id="k-util-sub"></div></div>
+        <div class="kpi"><div class="lbl">Deferred queue</div><div class="val" id="k-queue">0<small>job-h</small></div><div class="sub" id="k-queue-sub"></div></div>
+        <div class="kpi"><div class="lbl">Carbon rate</div><div class="val" id="k-crate">0<small>kg/h</small></div></div>
+        <div class="kpi"><div class="lbl">Water use</div><div class="val" id="k-water">0<small>L/h</small></div></div>
+        <div class="kpi good"><div class="lbl">Energy saved vs baseline</div><div class="val" id="k-esaved">0<small>MWh</small></div><div class="sub" id="k-esaved-sub"></div></div>
+        <div class="kpi good"><div class="lbl">CO₂ avoided vs baseline</div><div class="val" id="k-csaved">0<small>t</small></div><div class="sub" id="k-csaved-sub"></div></div>
+      </div>
+      <div class="gauges">
+        <div class="gauge"><svg id="g-pue" viewBox="0 0 160 100"></svg></div>
+        <div class="gauge"><svg id="g-ci" viewBox="0 0 160 100"></svg></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Agent activity</h2>
+      <div class="agents">
+        <div class="agent-card" id="ag-ls" style="--c:#ff7eb6"><div class="bar"></div><div><div class="name">LOAD SHIFTER</div><div class="obs" id="ag-ls-obs"></div></div><div class="act" id="ag-ls-act"></div></div>
+        <div class="agent-card" id="ag-dc" style="--c:#7ee787"><div class="bar"></div><div><div class="name">COOLING</div><div class="obs" id="ag-dc-obs"></div></div><div class="act" id="ag-dc-act"></div></div>
+        <div class="agent-card" id="ag-bat" style="--c:#ffd84d"><div class="bar"></div><div><div class="name">BATTERY</div><div class="obs" id="ag-bat-obs"></div></div><div class="act" id="ag-bat-act"></div></div>
+      </div>
+      <p class="note">Each agent sees its own 26-value observation and picks one of 3 actions every 15 minutes; all share the carbon reward.</p>
+    </div>
+  </section>
+</main>
+
+<!-- ======================= LAB ======================= -->
+<main id="view-lab" class="view">
+  <section class="stack">
+    <div class="panel">
+      <h2>How the three agents are updated</h2>
+      <svg id="update-svg" viewBox="0 0 760 430"></svg>
+      <div class="seg" style="max-width:420px">
+        <button class="btn" id="btn-iter">RUN ONE UPDATE ITERATION</button>
+        <button class="btn on" id="btn-autoiter">AUTO</button>
+      </div>
+      <p class="explain"><b>MAPPO</b> updates all three actors at once from the same batch. Each one assumes its teammates' policies stay fixed, so their changes can collide.
+      <b>HAPPO</b> draws a random order each iteration and updates the agents one after another. Each agent's advantage is re-weighted by the factor <b>M</b>, which carries the policy changes its predecessors just made.</p>
+    </div>
+  </section>
+  <section class="stack">
+    <div class="panel">
+      <h2>Correction factor M explorer</h2>
+      <p class="explain">Drag the probability ratios r = π<sub>new</sub>/π<sub>old</sub> of the first two agents in the order. M is what the third agent's advantage gets multiplied by.</p>
+      <div class="lab-controls">
+        <div class="slider"><label>r₁ (first agent) <output id="o-r1">1.20</output></label><input type="range" id="s-r1" min="0.5" max="1.8" step="0.01" value="1.2"></div>
+        <div class="slider"><label>r₂ (second agent) <output id="o-r2">1.30</output></label><input type="range" id="s-r2" min="0.5" max="1.8" step="0.01" value="1.3"></div>
+        <div class="slider"><label>ε (clip range) <output id="o-eps">0.25</output></label><input type="range" id="s-eps" min="0.05" max="0.5" step="0.01" value="0.25"></div>
+        <div class="slider"><label>Advantage Â <output id="o-adv">+1.00</output></label><input type="range" id="s-adv" min="-2" max="2" step="0.05" value="1"></div>
+      </div>
+      <svg id="mchain-svg" viewBox="0 0 640 300"></svg>
+      <div class="formula">stock HAPPO:      M ← M · r
+clipped variant:  M ← clip(M · r, 1 − ε, 1 + ε)    (slide 12)</div>
+      <p class="note">The clipped update is the modification described on slide 12. The <b>happo.py</b> / runner code in this repository is the stock HARL version; confirm the team's diff before presenting it. No ablation of this change was run, so the dashboard shows only its mechanics, not a measured effect.</p>
+    </div>
+  </section>
+</main>
+
+<!-- ======================= MEASURED RESULTS ======================= -->
+<main id="view-results" class="view">
+  <section class="stack" style="grid-column: span 2">
+    <div class="stat-row">
+      <div class="kpi"><div class="lbl">Best reward · HAPPO <span class="tag-meas">MEASURED</span></div><div class="val" style="color:var(--amber)">+319.1</div><div class="sub">at 819k steps</div></div>
+      <div class="kpi"><div class="lbl">Best reward · MAPPO <span class="tag-meas">MEASURED</span></div><div class="val" style="color:var(--violet)">+290.7</div><div class="sub">at 410k steps · HAPPO +9.8 %</div></div>
+      <div class="kpi"><div class="lbl">Facility power saved <span class="tag-meas">MEASURED</span></div><div class="val" style="color:var(--green)">−9.6 %</div><div class="sub">1,417 → 1,281 kW (MAPPO) · 1,278 kW (HAPPO, −9.8 %)</div></div>
+      <div class="kpi"><div class="lbl">Unfinished jobs at best <span class="tag-meas">MEASURED</span></div><div class="val">0 <small>vs</small> 20,588</div><div class="sub">HAPPO best vs MAPPO best checkpoint</div></div>
+    </div>
+  </section>
+  <section class="stack">
+    <div class="panel">
+      <h2>Episode reward during training <span class="tag-meas">MEASURED</span></h2>
+      <canvas class="chart" id="ch-reward" style="height:260px"></canvas>
+      <div class="chart-legend"><span><b style="background:var(--amber)"></b>HAPPO</span><span><b style="background:var(--violet)"></b>MAPPO</span></div>
+      <p class="note">19 evaluated checkpoints, one seed each. After the peak both runs drift; the mean over all positive checkpoints is about +198 for both, so the gap is in the peak and in reliability, not in the average.</p>
+    </div>
+    <div class="panel">
+      <h2>Unfinished (overdue) jobs per checkpoint <span class="tag-meas">MEASURED</span></h2>
+      <canvas class="chart" id="ch-backlog" style="height:220px"></canvas>
+      <div class="chart-legend"><span><b style="background:var(--amber)"></b>HAPPO</span><span><b style="background:var(--violet)"></b>MAPPO</span><span>log scale</span></div>
+    </div>
+  </section>
+  <section class="stack">
+    <div class="panel">
+      <h2>Where the saving comes from <span class="tag-meas">MEASURED</span></h2>
+      <canvas class="chart" id="ch-levers" style="height:230px"></canvas>
+      <div class="chart-legend"><span><b style="background:var(--yellow)"></b>energy change %</span><span><b style="background:var(--green)"></b>carbon change %</span></div>
+      <p class="note">Lever study: one agent active at a time vs standard operation. Cooling gives almost all the energy saving; battery and job shifting add carbon savings by moving consumption into cleaner hours. The 15 °C setpoint costs about +4.8 % water.</p>
+    </div>
+    <div class="panel">
+      <h2>Facility power at the best checkpoints <span class="tag-meas">MEASURED</span></h2>
+      <table class="res-table">
+        <thead><tr><th></th><th>IT kW</th><th>Cooling kW</th><th>Total kW</th><th>Change</th></tr></thead>
+        <tbody>
+          <tr><td>Standard operation</td><td>1,040</td><td>376</td><td>1,417</td><td>—</td></tr>
+          <tr><td>MAPPO</td><td class="m">927</td><td class="m">354</td><td class="m">1,281</td><td class="m">−9.6 %</td></tr>
+          <tr><td>HAPPO (ours)</td><td class="h">927</td><td class="h">351</td><td class="h">1,278</td><td class="h">−9.8 %</td></tr>
+        </tbody>
+      </table>
+      <p class="note">≈ 98 MWh and ≈ 24 t CO₂ saved per simulated month. Carbon per step 80.2 kg (HAPPO) vs 83.1 kg (MAPPO). Single seed; treat the HAPPO–MAPPO gap as indicative.</p>
+    </div>
+  </section>
+</main>
+
+<script src="model.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
